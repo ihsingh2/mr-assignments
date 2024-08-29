@@ -1,0 +1,5 @@
+**/__pycache__/
+**/.ipynb_checkpoints/
+**/.tmp/
+**/.vscode/
+waymo_080_sequence/
