@@ -2,4 +2,9 @@
 **/.ipynb_checkpoints/
 **/.tmp/
 **/.vscode/
-waymo_080_sequence/
+
+cam2ego/
+ego2world/
+images/
+intrinsics/
+lidar/
