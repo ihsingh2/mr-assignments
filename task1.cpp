@@ -5,6 +5,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cmath>
 
 struct CameraIntrinsics {
     double fx;
@@ -105,6 +106,16 @@ struct ReprojectionError {
     CameraIntrinsics intrinsics_;
 };
 
+void InitializeCameraPoses(int num_poses, std::vector<CameraPose>& camera_poses) {
+    camera_poses.insert(camera_poses.end(), {
+        CameraPose( 1.0,  0.0,  0.0,  0.0,  0.0,  250),
+        CameraPose(-1.0,  0.0,  0.0,  0.0,  0.0,  300),
+        CameraPose( 1.0,  1.0,  0.0,  0.0,  0.0,  250),
+        CameraPose(-1.0, -1.0,  1.0,  0.0,  0.0,  200),
+        CameraPose( 0.0,  0.0,  0.0,  0.0,  0.0,  300)
+    });
+}
+
 bool LoadCorrespondences(const std::string& filepath, std::vector<Correspondence>& correspondences) {
     std::ifstream file(filepath);
     if (!file.is_open()) {
@@ -126,14 +137,38 @@ bool LoadCorrespondences(const std::string& filepath, std::vector<Correspondence
     return true;
 }
 
-void InitializeCameraPoses(int num_poses, std::vector<CameraPose>& camera_poses) {
-    camera_poses.insert(camera_poses.end(), {
-        CameraPose(1, 0, 0, 0.0, 0.0, 263),
-        CameraPose(-1, 0, 0, 0.0, 0.0, 289),
-        CameraPose(1, 1, 0, 0.0, 0.0, 261),
-        CameraPose(-1, -1, 1, 0.0, 0.0, 201),
-        CameraPose(0, 0, 0.0, 0.0, 0.0, 298)
-    });
+bool LoadExtrinsic(const std::string& filepath, std::array<std::array<double, 4>, 4>& extrinsic) {
+    std::ifstream file(filepath);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open extrinsic file: " << filepath << std::endl;
+        return false;
+    }
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            file >> extrinsic[i][j];
+        }
+    }
+    return true;
+}
+
+void PrintExtrinsic(std::array<std::array<double, 4>, 4>& extrinsic) {
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++)
+            std::cout << extrinsic[i][j] << " ";
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
+}
+
+double ComputeRMSE(std::array<std::array<double, 4>, 4>& matrix1, std::array<std::array<double, 4>, 4>& matrix2) {
+    double rmse = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            double diff = matrix1[i][j] - matrix2[i][j];
+            rmse += diff * diff;
+        }
+    }
+    return std::sqrt(rmse / 16.0);
 }
 
 int main(int argc, char** argv) {
@@ -179,16 +214,18 @@ int main(int argc, char** argv) {
     ceres::Solve(options, &problem, &summary);
     std::cout << summary.FullReport() << "\n";
 
+    double mse = 0.0;
     for (int i = 0; i < num_poses; ++i) {
         std::cout << "Pose " << i << ":\n";
-        std::array<std::array<double, 4>, 4> transform = camera_poses[i].TransformationMatrix();
-        for (int j = 0; j < 4; ++j) {
-            for (int k = 0; k < 4; ++k)
-                std::cout << transform[j][k] << " ";
-            std::cout << std::endl;
+        std::array<std::array<double, 4>, 4> prediction = camera_poses[i].TransformationMatrix();
+        PrintExtrinsic(prediction);
+
+        std::array<std::array<double, 4>, 4> extrinsic;
+        if (LoadExtrinsic("data/Extrinsics/pose" + std::to_string(i) + ".txt", extrinsic)) {
+            mse += ComputeRMSE(extrinsic, prediction) / num_poses;
         }
-        std::cout << std::endl;
     }
+    std::cout << "Average RMSE " << mse << std::endl;
 
     return 0;
 }
